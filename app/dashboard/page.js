@@ -1,9 +1,11 @@
 "use client";
 
 import React from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import AuthGuard from "../components/AuthGuard";
 import Link from "next/link";
+import { auth } from "@/lib/firebase";
 import {
   FaStethoscope,
   FaRegCalendarCheck,
@@ -14,7 +16,18 @@ import {
   FaRegUserCircle,
 } from "react-icons/fa";
 
+
+
 export default function Dashboard() {
+    const [username, setUsername] = useState(" ");
+
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (user) {
+      setUsername(user.displayName || user.email?.split("@")[0] || "User");
+    }
+  }, []);
+
   return (
     <AuthGuard>
       <main className="min-h-screen px-4 py-14 md:py-20 bg-gradient-to-br from-emerald-50 via-blue-50 to-cyan-100 flex flex-col justify-center overlay">
@@ -28,7 +41,13 @@ export default function Dashboard() {
           <h1 className="text-4xl md:text-5xl font-extrabold text-emerald-800 mb-3 drop-shadow-sm">
             Welcome to{" "}
             <span className="text-cyan-700">Elderly Care Portal</span>
+                        {username && (
+              <span className="ml-3 text-cyan-700 text-2xl font-semibold">
+                – Hello, {username}!
+              </span>
+            )}
           </h1>
+
           <p className="text-xl text-gray-700 max-w-xl mx-auto mb-8">
             Easily manage your health, stay updated with care programs, and
             access daily wellness support—all in one trusted place.
