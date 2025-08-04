@@ -1,3 +1,4 @@
+// app/dashboard/page.js
 "use client";
 
 import React from "react";
@@ -17,10 +18,8 @@ import {
 } from "react-icons/fa";
 
 
-
 export default function Dashboard() {
-    const [username, setUsername] = useState(" ");
-
+  const [username, setUsername] = useState(" ");
   useEffect(() => {
     const user = auth.currentUser;
     if (user) {
@@ -41,7 +40,7 @@ export default function Dashboard() {
           <h1 className="text-4xl md:text-5xl font-extrabold text-emerald-800 mb-3 drop-shadow-sm">
             Welcome to{" "}
             <span className="text-cyan-700">Elderly Care Portal</span>
-                        {username && (
+            {username && (
               <span className="ml-3 text-cyan-700 text-2xl font-semibold">
                 – Hello, {username}!
               </span>

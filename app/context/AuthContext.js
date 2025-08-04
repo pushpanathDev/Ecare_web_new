@@ -1,6 +1,7 @@
 // app/context/AuthContext.js
 "use client";
 
+import { useRouter } from "next/navigation"; // ✅ Add this
 import { createContext, useContext, useState, useEffect } from "react";
 import {
   signInWithPopup,
@@ -19,6 +20,8 @@ export const AuthContextProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const router = useRouter(); // ✅ Initialize router here
+
   const googleSignIn = () => {
     const provider = new GoogleAuthProvider();
     return signInWithPopup(auth, provider);
@@ -28,22 +31,26 @@ export const AuthContextProvider = ({ children }) => {
     return signInWithEmailAndPassword(auth, email, password);
   };
 
-  // ✅ Takes name during sign up
-  const signUpWithEmailPassword = async (name, email, password) => {
-    const result = await createUserWithEmailAndPassword(auth, email, password);
+  const signUpWithEmailPassword = async (name, email, password, role) => {
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
 
-    // ✅ Write to Firestore immediately
-    const userRef = doc(db, "users", result.user.uid);
-    await setDoc(userRef, {
-      name: name,
-      email: email
+    await setDoc(doc(db, "users", user.uid), {
+      uid: user.uid,
+      name,
+      email,
+      role,
+      createdAt: serverTimestamp()
     });
 
-    console.log("✅ New user registered & saved with name:", name);
+    await signOut(auth);
+    return user;
   };
 
-  const logOut = () => {
-    return signOut(auth);
+  const logOut = async () => {
+    await signOut(auth);
+    setUser(null);
+    router.push("/auth/login"); // ✅ This now works
   };
 
   useEffect(() => {
@@ -56,13 +63,16 @@ export const AuthContextProvider = ({ children }) => {
           const userSnap = await getDoc(userRef);
 
           if (!userSnap.exists()) {
-            // ✅ Fallback: Google user auto add
             await setDoc(userRef, {
               name: currentUser.displayName || "",
-              email: currentUser.email || ""
+              email: currentUser.email || "",
+              role: "user",
             });
-            console.log("✅ Google user added to Firestore");
           }
+
+          const userData = userSnap.data();
+          setUser({ ...currentUser, role: userData.role || "user" });
+
         } catch (err) {
           console.error("❌ Firestore error:", err);
         }
@@ -82,16 +92,11 @@ export const AuthContextProvider = ({ children }) => {
       idleTimer = setTimeout(() => {
         console.log("⏰ Auto sign-out due to 10 min inactivity");
         signOut(auth);
+        router.push("/auth/login"); // 👈 You can also redirect here if idle
       }, 10 * 60 * 1000);
     };
 
-    const activityEvents = [
-      "mousemove",
-      "keydown",
-      "click",
-      "scroll",
-      "touchstart",
-    ];
+    const activityEvents = ["mousemove", "keydown", "click", "scroll", "touchstart"];
 
     if (user && !loading) {
       activityEvents.forEach((event) =>
@@ -125,6 +130,3 @@ export const AuthContextProvider = ({ children }) => {
 };
 
 export const useAuth = () => useContext(AuthContext);
-
-
-

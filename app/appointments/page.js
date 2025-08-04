@@ -5,37 +5,61 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import AuthGuard from "../components/AuthGuard";
 import { FaCalendarPlus, FaCalendarAlt, FaUserMd, FaClock } from "react-icons/fa";
-
-// MOCK data for demonstration. Replace this with your Firestore fetch.
-const mockAppointments = [
-  {
-    id: "1",
-    doctor: "Dr. Shalini Sharma",
-    specialty: "Geriatric Medicine",
-    date: "2024-07-20",
-    time: "10:30 AM",
-    mode: "Clinic Visit",
-    status: "Upcoming",
-  },
-  {
-    id: "2",
-    doctor: "Dr. Ayush Gupta",
-    specialty: "Nutritionist",
-    date: "2024-07-15",
-    time: "02:00 PM",
-    mode: "Teleconsultation",
-    status: "Completed",
-  },
-];
+import { db } from "@/lib/firebase";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { useAuth } from "../context/AuthContext";
 
 export default function AppointmentsPage() {
+  const { user } = useAuth();
   const [appointments, setAppointments] = useState([]);
+  const [caretakerMap, setCaretakerMap] = useState({});
+  const [loading, setLoading] = useState(true);
 
-  // Simulate loading data (replace with Firestore fetch)
   useEffect(() => {
-    // TODO: Fetch appointments from Firebase for the logged-in user.
-    setAppointments(mockAppointments);
-  }, []);
+    if (!user) return;
+
+    const fetchAppointments = async () => {
+      try {
+        const q = query(
+          collection(db, "appointments"),
+          where("userId", "==", user.uid)
+        );
+        const querySnapshot = await getDocs(q);
+        const fetchedAppointments = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setAppointments(fetchedAppointments);
+        console.log("Fetched appointments:", fetchedAppointments);
+      } catch (error) {
+        console.error("Error fetching appointments:", error);
+      }
+    };
+
+    const fetchCaretakers = async () => {
+      try {
+        const q = query(collection(db, "caretakers"));
+        const snapshot = await getDocs(q);
+        const map = {};
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          map[doc.id] = data.name || "Unnamed Caretaker";
+        });
+        setCaretakerMap(map);
+      } catch (error) {
+        console.error("Error fetching caretakers:", error);
+      }
+    };
+
+    const fetchAll = async () => {
+      await Promise.all([fetchAppointments(), fetchCaretakers()]);
+      setLoading(false);
+    };
+
+    fetchAll();
+  }, [user]);
+
+  if (loading) return <div className="text-center mt-20 text-lg text-gray-600">Loading appointments...</div>;
 
   return (
     <AuthGuard>
@@ -73,48 +97,64 @@ export default function AppointmentsPage() {
             </motion.div>
           ) : (
             <div className="grid gap-6">
-              {appointments.map((appt) => (
-                <motion.div
-                  key={appt.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: 0.1 }}
-                  className={`flex flex-col md:flex-row justify-between items-center bg-white rounded-2xl px-6 py-5 shadow hover:shadow-lg border-2 ${
-                    appt.status === "Upcoming"
-                      ? "border-cyan-200"
-                      : "border-gray-100 opacity-60"
-                  } transition-all`}
-                >
-                  <div className="flex items-center gap-3 w-full">
-                    <div>
-                      <FaUserMd className="text-2xl text-emerald-500" />
-                    </div>
-                    <div>
-                      <div className="text-lg md:text-xl font-semibold text-gray-800">
-                        {appt.doctor}
+              {appointments.map((appt) => {
+                const dateTime = new Date(appt.timeSlot);
+                const dateStr = dateTime.toLocaleDateString("en-US", {
+                  weekday: "long",
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                });
+                const timeStr = dateTime.toLocaleTimeString("en-US", {
+                  hour: "numeric",
+                  minute: "2-digit",
+                  hour12: true,
+                });
+
+                const caretakerName = caretakerMap[appt.caretakerId] || "Caretaker";
+
+                return (
+                  <motion.div
+                    key={appt.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.1 }}
+                    className={`flex flex-col md:flex-row justify-between items-center bg-white rounded-2xl px-6 py-5 shadow hover:shadow-lg border-2 ${
+                      appt.status === "pending"
+                        ? "border-yellow-300"
+                        : "border-gray-200 opacity-70"
+                    } transition-all`}
+                  >
+                    <div className="flex items-center gap-3 w-full">
+                      <div>
+                        <FaUserMd className="text-2xl text-emerald-500" />
                       </div>
-                      <div className="text-gray-600 text-base">{appt.specialty}</div>
-                      <div className="text-gray-500 text-sm mt-1">
-                        {appt.mode}
+                      <div>
+                        <div className="text-lg md:text-xl font-semibold text-gray-800">
+                          Reason: {appt.reason}
+                        </div>
+                        <div className="text-gray-600 text-base">
+                          Caretaker: {caretakerName}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex flex-col md:items-end md:text-right mt-4 md:mt-0">
-                    <div className="flex items-center gap-2 text-cyan-700 text-lg font-medium">
-                      <FaClock /> {appt.date}, {appt.time}
+                    <div className="flex flex-col md:items-end md:text-right mt-4 md:mt-0">
+                      <div className="flex items-center gap-2 text-cyan-700 text-lg font-medium">
+                        <FaClock /> {dateStr} at {timeStr}
+                      </div>
+                      <span
+                        className={`mt-2 px-3 py-1 text-sm rounded-full font-semibold ${
+                          appt.status === "pending"
+                            ? "bg-yellow-100 text-yellow-800"
+                            : "bg-gray-200 text-gray-500"
+                        }`}
+                      >
+                        {appt.status}
+                      </span>
                     </div>
-                    <span
-                      className={`mt-2 px-3 py-1 text-sm rounded-full font-semibold ${
-                        appt.status === "Upcoming"
-                          ? "bg-cyan-100 text-cyan-800"
-                          : "bg-gray-200 text-gray-500"
-                      }`}
-                    >
-                      {appt.status}
-                    </span>
-                  </div>
-                </motion.div>
-              ))}
+                  </motion.div>
+                );
+              })}
             </div>
           )}
         </div>
